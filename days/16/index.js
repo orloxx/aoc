@@ -1,123 +1,122 @@
 import assert from 'assert'
 import read from '../../utils/read.js'
+import dijkstra from '../../utils/dijkstra.js'
+
+const CELLS = {
+  wall: '#',
+  empty: '.',
+  start: 'S',
+  end: 'E',
+}
 
 const DIR = {
-  N: [-1, 0],
-  W: [0, -1],
-  S: [1, 0],
-  E: [0, 1],
+  north: [-1, 0],
+  east: [0, 1],
+  south: [1, 0],
+  west: [0, -1],
 }
 
-const DIR_CHANGE = {
-  // mirror /
-  [`/${DIR.N.join()}`]: DIR.E,
-  [`/${DIR.W.join()}`]: DIR.S,
-  [`/${DIR.S.join()}`]: DIR.W,
-  [`/${DIR.E.join()}`]: DIR.N,
-  // mirror \
-  [`\\${DIR.N.join()}`]: DIR.W,
-  [`\\${DIR.W.join()}`]: DIR.N,
-  [`\\${DIR.S.join()}`]: DIR.E,
-  [`\\${DIR.E.join()}`]: DIR.S,
+function getCapicua(list) {
+  const matrix = list.map((line) => line.split(''))
+
+  return matrix.reduce(
+    (acc, row, y) => {
+      row.forEach((cell, x) => {
+        if (cell === CELLS.start) acc.start = [y, x]
+        else if (cell === CELLS.end) acc.end = [y, x]
+      })
+
+      return acc
+    },
+    { matrix, start: [], end: [] }
+  )
 }
 
-const SPLIT = {
-  // splitter -
-  [`-${DIR.N.join()}`]: [DIR.W, DIR.E],
-  [`-${DIR.W.join()}`]: [],
-  [`-${DIR.S.join()}`]: [DIR.W, DIR.E],
-  [`-${DIR.E.join()}`]: [],
-  // splitter |
-  [`|${DIR.N.join()}`]: [],
-  [`|${DIR.W.join()}`]: [DIR.N, DIR.S],
-  [`|${DIR.S.join()}`]: [],
-  [`|${DIR.E.join()}`]: [DIR.N, DIR.S],
+function scan({ matrix, start, dir }) {
+  const [y, x] = start
+  const cIdx = dir.findIndex((c) => c !== 0)
+  const [dy, dx] = dir
+  let i = start[cIdx]
+  const turns = []
+
+  const notWall = (idx) => {
+    return cIdx === 0
+      ? // scan up/down
+        matrix[idx][x] !== CELLS.wall
+      : // scan left/right
+        matrix[y][idx] !== CELLS.wall
+  }
+
+  while (notWall(i)) {
+    i += dir[cIdx]
+
+    // cell where the turn could happen
+    const [ty, tx] = cIdx === 0 ? [i, x] : [y, i]
+
+    // check if there's a way to turn:
+    if (
+      matrix[ty + dx][tx + dy] === CELLS.empty ||
+      matrix[ty - dx][tx - dy] === CELLS.empty
+    ) {
+      turns.push([ty, tx])
+    }
+  }
+
+  return turns
 }
 
-function beamMeUp({ mirrorMatrix, start = [0, 0], dir = DIR.E }) {
-  const matrix = mirrorMatrix.map((row) => row.map((c) => ({ ...c })))
-  const heads = [{ pos: start, dir }]
+function buildTurnsTree({ matrix, start, end, tree = {} }) {
+  if (start === end) return tree
 
-  while (heads.length) {
-    heads.forEach((_, i) => {
-      const [y, x] = heads[i].pos
+  const [y, x] = start
 
-      // stop when out of bounds or when beam is in a cycle
-      if (
-        y < 0 ||
-        x < 0 ||
-        y >= matrix.length ||
-        x >= matrix[0].length ||
-        matrix[y][x].dirs.some((d) => d.join() === heads[i].dir.join())
-      ) {
-        heads.splice(i, 1)
-        return
-      }
-
-      const { cell } = matrix[y][x]
-      // energize cell
-      matrix[y][x].energy++
-      // add beam direction to cell
-      matrix[y][x].dirs.push(heads[i].dir)
-
-      // Change direction
-      if (['/', '\\'].includes(cell)) {
-        heads[i].dir = DIR_CHANGE[`${cell}${heads[i].dir.join()}`]
-      } else if (['-', '|'].includes(cell)) {
-        const splits = SPLIT[`${cell}${heads[i].dir.join()}`]
-
-        if (splits.length) {
-          const [dy, dx] = splits[1]
-
-          heads[i].dir = splits[0]
-          heads.push({ pos: [y + dy, x + dx], dir: splits[1] })
-        }
-      }
-
-      const [dy, dx] = heads[i].dir
-
-      // move head
-      heads[i].pos = [y + dy, x + dx]
+  const weightedTurns = Object.values(DIR).reduce((acc, dir) => {
+    scan({ matrix, start, dir }).forEach(([ty, tx]) => {
+      acc[[ty, tx]] = Math.abs(ty - y) + Math.abs(tx - x) + 1000
     })
-  }
 
-  return matrix
+    return acc
+  }, {})
+
+  // eslint-disable-next-line no-param-reassign
+  tree[start] = weightedTurns
+
+  return Object.keys(weightedTurns).reduce((acc, turn) => {
+    if (acc[turn]) return acc
+
+    const [ty, tx] = turn.split(',').map(Number)
+
+    return buildTurnsTree({
+      matrix,
+      start: [ty, tx],
+      end,
+      tree: acc,
+    })
+  }, tree)
 }
 
-function getMirrorMatrix(list) {
-  return list.map((row) =>
-    row.split('').map((c) => ({ cell: c, energy: 0, dirs: [] }))
-  )
+function solution01(list) {
+  const capicua = getCapicua(list)
+  const tree = buildTurnsTree(capicua)
+
+  const cheapPath = dijkstra(tree, capicua.start.join(), capicua.end.join())
+
+  return cheapPath.distance
 }
 
-function solution01(list, start = [0, 0], dir = DIR.E) {
-  const mirrorMatrix = getMirrorMatrix(list)
-  const energyMatrix = beamMeUp({ mirrorMatrix, start, dir }).map((line) =>
-    line.map((c) => (c.energy > 0 ? '#' : '.'))
-  )
+function solution02(list) {}
 
-  return energyMatrix.flat2DMatrix().filter((c) => c === '#').length
-}
+read('test01.txt').then((list) => {
+  assert.deepEqual(solution01(list), 7036)
+  // assert.deepEqual(solution02(list), 12)
+})
 
-function solution02(list) {
-  const energyList = []
-
-  for (let i = 0; i < list.length; i++) {
-    energyList.push(solution01(list, [i, 0], DIR.E))
-    energyList.push(solution01(list, [0, i], DIR.S))
-    energyList.push(solution01(list, [i, list.length - 1], DIR.W))
-    energyList.push(solution01(list, [list.length - 1, i], DIR.N))
-  }
-
-  return Math.max(...energyList)
-}
-
-read('test.txt').then((list) => {
-  assert.deepEqual(solution01(list), 46)
-  assert.deepEqual(solution02(list), 51)
+read('test02.txt').then((list) => {
+  assert.deepEqual(solution01(list), 11048)
+  // assert.deepEqual(solution02(list), 12)
 })
 
 read('input.txt').then((list) => {
-  assert.deepEqual(solution01(list), 7870)
-  assert.deepEqual(solution02(list), 8143)
+  assert.deepEqual(solution01(list), 99448)
+  // assert.deepEqual(solution02(list), 7083)
 })

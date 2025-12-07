@@ -2,105 +2,74 @@ import assert from 'assert'
 import read from '../../utils/read.js'
 
 function parseInput(list) {
-  const [[seeds], ...sourceToDestMap] = list.reduce((acc, line) => {
-    if (!acc.length) return [[line]]
+  const breakIdx = list.indexOf('')
+  const rules = list
+    .slice(0, breakIdx)
+    .map((line) => line.split('|').map(Number))
+    .reduce((acc, [key, value]) => {
+      acc[key] = [...(acc[key] || []), value]
+      return acc
+    }, {})
+  const updates = list
+    .slice(breakIdx + 1)
+    .map((line) => line.split(',').map(Number))
 
-    if (!line) return [...acc, []]
-
-    const last = acc[acc.length - 1]
-    return [...acc.slice(0, -1), [...last, line]]
-  }, [])
-
-  /**
-   * sourceToDestMap is an array of 7 values:
-   * [
-   *   seedSoil,
-   *   soilFertilizer,
-   *   fertilizerWater,
-   *   waterLight,
-   *   lightTemperature,
-   *   temperatureHumidity,
-   *   humidityLocation
-   * ]
-   */
-  return {
-    seeds: seeds.replace('seeds: ', '').split(' ').toNumber(),
-    // Each parsed map contains these three values: [destination, source, length]
-    sourceToDestMap: sourceToDestMap.map((map) => {
-      const numbers = map.slice(1).map((line) => line.split(' ').toNumber())
-
-      // return the numbers sorted by source
-      return numbers.sort((a, b) => a[1] - b[1])
-    }),
-  }
+  return { rules, updates }
 }
 
-function getSmallSeedLocations({ seed, sourceToDestMap }) {
-  const seedPath = [seed]
+function isCorrectUpdate({ update, rules }) {
+  return update.every((value, i) => {
+    if (i === 0) return true
 
-  sourceToDestMap.forEach((map) => {
-    const lastPath = seedPath[seedPath.length - 1]
-    const [, lastSource, lastLength] = map[map.length - 1]
-    const [minSource, maxSource] = [map[0][1], lastSource + lastLength - 1]
+    const rule = rules[value]
+    const others = update.slice(0, i)
 
-    if (lastPath < minSource || lastPath > maxSource) {
-      seedPath.push(lastPath)
-      return
-    }
+    return others.every((other) => {
+      if (!rule) return true
 
-    const sourceMap = map.find(([, s, l]) => lastPath >= s && lastPath < s + l)
-
-    if (!sourceMap) {
-      seedPath.push(lastPath)
-      return
-    }
-
-    const [dest, src] = sourceMap
-    const deltaSrc = lastPath - src
-
-    seedPath.push(dest + deltaSrc)
-  })
-
-  return seedPath[seedPath.length - 1]
-}
-
-function findSeedLocations({ seeds, sourceToDestMap }) {
-  return seeds
-    .map((seed) => {
-      return getSmallSeedLocations({ seed, sourceToDestMap })
+      return !rule.includes(other)
     })
-    .sortIntegers()[0]
+  })
 }
 
 function solution01(list) {
-  return findSeedLocations(parseInput(list))
+  const { rules, updates } = parseInput(list)
+
+  return updates.reduce((acc, update) => {
+    if (!isCorrectUpdate({ update, rules })) return acc
+
+    const middle = update[Math.floor(update.length / 2)]
+
+    return acc + middle
+  }, 0)
 }
 
 function solution02(list) {
-  const { seeds, sourceToDestMap } = parseInput(list)
-  let smallest = Infinity
+  const { rules, updates } = parseInput(list)
 
-  for (let i = 0; i < seeds.length; i++) {
-    if (i % 2 === 0) {
-      const [seed, times] = [seeds[i], seeds[i + 1]]
+  return updates.reduce((acc, update) => {
+    if (isCorrectUpdate({ update, rules })) return acc
 
-      for (let j = seed; j < seed + times; j++) {
-        const small = getSmallSeedLocations({ seed: j, sourceToDestMap })
+    update.sort((a, b) => {
+      const rule = rules[b]
 
-        smallest = Math.min(small, smallest)
-      }
-    }
-  }
+      if (!rule) return 0
 
-  return smallest
+      return rule.includes(a) ? -1 : 1
+    })
+
+    const middle = update[Math.floor(update.length / 2)]
+
+    return acc + middle
+  }, 0)
 }
 
 read('test.txt').then((list) => {
-  assert.deepEqual(solution01(list), 35)
-  assert.deepEqual(solution02(list), 46)
+  assert.deepEqual(solution01(list), 143)
+  assert.deepEqual(solution02(list), 123)
 })
 
 read('input.txt').then((list) => {
-  assert.deepEqual(solution01(list), 313045984)
-  assert.deepEqual(solution02(list), 20283860)
+  assert.deepEqual(solution01(list), 4569)
+  assert.deepEqual(solution02(list), 6456)
 })

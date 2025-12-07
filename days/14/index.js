@@ -1,127 +1,125 @@
 import assert from 'assert'
 import read from '../../utils/read.js'
 
-const DIR = {
-  N: [-1, 0],
-  W: [0, -1],
-  S: [1, 0],
-  E: [0, 1],
+const ROBOT = '█'
+
+function* robotMovement({ position, velocity, dimensions }) {
+  let [x, y] = position
+  const [vx, vy] = velocity
+  const [width, height] = dimensions
+
+  while (true) {
+    x += vx
+    y += vy
+
+    if (x < 0) x = width + (x % width)
+    if (y < 0) y = height + (y % height)
+
+    yield [x % width, y % height]
+  }
 }
 
-function getNewMatrixPerspective({ matrix, dir }) {
-  if (dir === DIR.W) return matrix.rotateClockwise()
-  if (dir === DIR.S) return matrix.rotateClockwise().rotateClockwise()
-  if (dir === DIR.E) return matrix.rotateCounterClockwise()
-  return matrix.map((line) => [...line])
+function parseInput(list, dimensions) {
+  return list.map((line) => {
+    const [positionStr, velocityStr] = line.split(' ')
+    const position = positionStr
+      .split(',')
+      .map((n) => Number(n.replace('p=', '')))
+    const velocity = velocityStr
+      .split(',')
+      .map((n) => Number(n.replace('v=', '')))
+
+    return robotMovement({ position, velocity, dimensions })
+  })
 }
 
-function revertMatrixPerspective({ matrix, dir }) {
-  if (dir === DIR.W) return matrix.rotateCounterClockwise()
-  if (dir === DIR.S) return matrix.rotateClockwise().rotateClockwise()
-  if (dir === DIR.E) return matrix.rotateClockwise()
-  return matrix
-}
+function getGrid({ dimensions, robotsPositions = [] }) {
+  const [width, height] = dimensions
+  const grid = [].nm2DMatrix(height, width, ' ')
 
-function tilt({ matrix, dir }) {
-  const newMatrix = getNewMatrixPerspective({ matrix, dir })
-
-  for (let i = 0; i < newMatrix.length; i++) {
-    for (let j = 0; j < newMatrix[0].length; j++) {
-      const spot = newMatrix[i][j]
-
-      // Move rock
-      if (spot === 'O') {
-        let y = i
-        while (y - 1 >= 0 && newMatrix[y - 1][j] === '.') {
-          y--
-        }
-        newMatrix[i][j] = '.'
-        newMatrix[y][j] = 'O'
-      }
-    }
+  if (robotsPositions.length) {
+    robotsPositions.forEach(([x, y]) => {
+      grid[y][x] = ROBOT
+    })
   }
 
-  return revertMatrixPerspective({ matrix: newMatrix, dir })
+  return grid
 }
 
-function totalLoad({ tilted }) {
-  return tilted.reduce((acc, row, i) => {
-    const rocks = row.filter((spot) => spot === 'O').length
+function countCuadrants({ robotsPositions, dimensions }) {
+  return robotsPositions
+    .reduce(
+      (acc, [x, y]) => {
+        const [width, height] = dimensions
 
-    return acc + rocks * (tilted.length - i)
-  }, 0)
+        if (x < Math.floor(width / 2) && y < Math.floor(height / 2))
+          acc[0].push([x, y])
+        if (x > Math.floor(width / 2) && y < Math.floor(height / 2))
+          acc[1].push([x, y])
+        if (x < Math.floor(width / 2) && y > Math.floor(height / 2))
+          acc[2].push([x, y])
+        if (x > Math.floor(width / 2) && y > Math.floor(height / 2))
+          acc[3].push([x, y])
+
+        return acc
+      },
+      // top left, top right, bottom left, bottom right
+      [[], [], [], []]
+    )
+    .reduce((acc, robots) => {
+      return acc * robots.length
+    }, 1)
 }
 
-function solution01(list) {
-  const matrix = list.map((line) => line.split(''))
-  const tilted = tilt({ matrix, dir: DIR.N })
+function solution01(list, dimensions) {
+  const robotsPositions = parseInput(list, dimensions).map((robotMove) => {
+    ;[].nMatrix(99).forEach(() => robotMove.next())
 
-  return totalLoad({ tilted })
+    return robotMove.next().value
+  })
+
+  return countCuadrants({ robotsPositions, dimensions })
 }
 
-function getCyclePattern(stackCycles) {
-  if (stackCycles.length < 2) return false
+function hasPattern({ robotsPositions, dimensions }) {
+  const grid = getGrid({ dimensions, robotsPositions })
 
-  const last = stackCycles[stackCycles.length - 1]
-  const sameIdx = stackCycles.findIndex(
-    (cycle, i) => i !== stackCycles.length - 1 && cycle.are2DSame(last)
+  return grid.some((row, y) =>
+    row.some((cell, x) => {
+      return (
+        cell === ROBOT &&
+        grid[y + 1]?.[x] === ROBOT &&
+        grid[y + 2]?.[x] === ROBOT &&
+        grid[y + 3]?.[x] === ROBOT &&
+        grid[y + 1]?.[x + 1] === ROBOT &&
+        grid[y + 2]?.[x + 2] === ROBOT &&
+        grid[y + 3]?.[x + 3] === ROBOT &&
+        grid[y + 4]?.[x + 4] === ROBOT
+      )
+    })
   )
-
-  if (sameIdx === -1) return false
-
-  const patternSize = stackCycles.length - 1 - sameIdx
-
-  if (sameIdx <= patternSize - 1) return false
-
-  const pattern1 = stackCycles.slice(-patternSize)
-  const pattern2 = stackCycles.slice(
-    stackCycles.length - 2 * patternSize,
-    -patternSize
-  )
-
-  const equal = pattern1.every((cycle, i) => cycle.are2DSame(pattern2[i]))
-
-  return equal ? pattern1 : false
 }
 
-function getLastCycle(list) {
-  const MAX = 1000000000
-  let tilted = list.map((line) => line.split(''))
-  const stackCycles = []
+function solution02(list, dimensions) {
+  const robotsMovement = parseInput(list, dimensions)
+  let robotsPositions = []
+  let count = 0
 
-  for (let i = 0; i < MAX; i++) {
-    tilted = tilt({ matrix: tilted, dir: DIR.N })
-    tilted = tilt({ matrix: tilted, dir: DIR.W })
-    tilted = tilt({ matrix: tilted, dir: DIR.S })
-    tilted = tilt({ matrix: tilted, dir: DIR.E })
-
-    stackCycles.push(tilted)
-
-    const pattern = getCyclePattern(stackCycles)
-
-    if (pattern) {
-      const rest = stackCycles.length - 2 * pattern.length
-      const idx = ((MAX - rest) % pattern.length) - 1
-
-      return pattern[idx]
-    }
+  while (!hasPattern({ robotsPositions, dimensions })) {
+    robotsPositions = robotsMovement.map((robotMove) => {
+      return robotMove.next().value
+    })
+    count++
   }
 
-  return false
-}
-
-function solution02(list) {
-  const lastMatrix = getLastCycle(list)
-
-  return totalLoad({ tilted: lastMatrix })
+  return count
 }
 
 read('test.txt').then((list) => {
-  assert.deepEqual(solution01(list), 136)
-  assert.deepEqual(solution02(list), 64)
+  assert.deepEqual(solution01(list, [11, 7]), 12)
 })
 
 read('input.txt').then((list) => {
-  assert.deepEqual(solution01(list), 105461)
-  assert.deepEqual(solution02(list), 102829)
+  assert.deepEqual(solution01(list, [101, 103]), 224357412)
+  assert.deepEqual(solution02(list, [101, 103]), 7083)
 })

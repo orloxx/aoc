@@ -1,76 +1,50 @@
 import assert from 'assert'
 import read from '../../utils/read.js'
+import { OBJ, treeFromGrid } from '../../utils/grid.js'
+import bfs from '../../utils/bfs.js'
 
-const DIR = {
-  U: [-1, 0],
-  L: [0, -1],
-  D: [1, 0],
-  R: [0, 1],
+function getWalledGrid(list, size) {
+  return list.reduce((acc, line) => {
+    const [x, y] = line.split(',').map(Number)
+
+    acc[y][x] = OBJ.wall
+
+    return acc
+  }, [].n2DMatrix(size + 1, OBJ.empty))
 }
 
-const HEX_DIR = ['R', 'D', 'L', 'U']
+function solution01(list, size, timeBytes) {
+  const grid = getWalledGrid(list.slice(0, timeBytes), size)
+  const tree = treeFromGrid(grid)
 
-function getPolygonPoints(list) {
-  let lastPoint = [0, 0]
-
-  return list.map((line) => {
-    const [dir, steps] = line.split(' ')
-    const [y, x] = lastPoint
-    const [dy, dx] = DIR[dir]
-    const [ny, nx] = [y + dy * steps, x + dx * steps]
-
-    lastPoint = [ny, nx]
-
-    return [ny, nx]
-  })
+  return bfs({ tree, start: '0,0', end: `${size},${size}` }).length - 1
 }
 
-function getPolygonArea(points) {
-  const shoeLace2 = points.reduce((acc, [y, x], i) => {
-    const [ny, nx] = points[i + 1] || points[0]
-    // Apply shoelace formula
-    return acc + (ny * x - y * nx)
-  }, 0)
+function solution02(list, size, timeBytes) {
+  const grid = getWalledGrid(list.slice(0, timeBytes), size)
+  const bytes = []
+  let path = [-1]
 
-  return Math.abs(shoeLace2 / 2)
-}
+  while (path.length) {
+    const [cx, cy] = list[timeBytes + bytes.length].split(',').map(Number)
 
-function getPolygonPerimeter(points) {
-  const perimeter = points.reduce((acc, [y, x], i) => {
-    const [ny, nx] = points[i + 1] || points[0]
-    // Apply shoelace formula
-    return acc + Math.sqrt((ny - y) ** 2 + (nx - x) ** 2)
-  }, 0)
+    grid[cy][cx] = OBJ.wall
+    bytes.push([cy, cx])
 
-  return (perimeter + 2) / 2
-}
+    const tree = treeFromGrid(grid)
 
-function solution01(list) {
-  const polygonPoints = getPolygonPoints(list)
+    path = bfs({ tree, start: '0,0', end: `${size},${size}` })
+  }
 
-  return getPolygonArea(polygonPoints) + getPolygonPerimeter(polygonPoints)
-}
-
-function solution02(list) {
-  const newList = list.map((line) => {
-    const [, , hex] = line.split(' ')
-    const hexValue = hex.replace('(#', '').replace(')', '')
-    const decimal = parseInt(hexValue.slice(0, 5), 16)
-    const dir = HEX_DIR[hexValue.slice(5, 6)]
-
-    return `${dir} ${decimal}`
-  })
-  const polygonPoints = getPolygonPoints(newList)
-
-  return getPolygonArea(polygonPoints) + getPolygonPerimeter(polygonPoints)
+  return bytes[bytes.length - 1]
 }
 
 read('test.txt').then((list) => {
-  assert.deepEqual(solution01(list), 62)
-  assert.deepEqual(solution02(list), 952408144115)
+  assert.deepEqual(solution01(list, 6, 12), 22)
+  assert.deepEqual(solution02(list, 6, 12), [1, 6])
 })
 
 read('input.txt').then((list) => {
-  assert.deepEqual(solution01(list), 49578)
-  assert.deepEqual(solution02(list), 52885384955882)
+  assert.deepEqual(solution01(list, 70, 1024), 384)
+  assert.deepEqual(solution02(list, 70, 1024 + 1887), [10, 36])
 })

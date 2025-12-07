@@ -1,53 +1,87 @@
 import assert from 'assert'
 import read from '../../utils/read.js'
 
-function parseInput(list) {
-  return list.reduce((acc, line) => {
-    const [card, numbers] = line.split(/: +/g)
-    const [win, mine] = numbers
-      .split(/ +\| +/g)
-      .map((x) => x.split(/ +/g).map(Number))
-    const intersection = win.filter((x) => mine.includes(x))
+function checkWord({ matrix, i, j, word }) {
+  const chars = word.split('')
 
-    // Originally it has one copy of each card
-    return { ...acc, [card]: { win, mine, intersection, copies: 1 } }
-  }, {})
+  return {
+    right: () => chars.every((c, k) => matrix[i]?.[j + k] === c),
+    left: () => chars.every((c, k) => matrix[i]?.[j - k] === c),
+    down: () => chars.every((c, k) => matrix[i + k]?.[j] === c),
+    up: () => chars.every((c, k) => matrix[i - k]?.[j] === c),
+    rightDown: () => chars.every((c, k) => matrix[i + k]?.[j + k] === c),
+    rightUp: () => chars.every((c, k) => matrix[i - k]?.[j + k] === c),
+    leftUp: () => chars.every((c, k) => matrix[i - k]?.[j - k] === c),
+    leftDown: () => chars.every((c, k) => matrix[i + k]?.[j - k] === c),
+  }
 }
 
 function solution01(list) {
-  return Object.values(parseInput(list)).reduce((sum, { intersection }) => {
-    if (!intersection.length) return sum
+  const matrix = list.map((line) => line.split(''))
 
-    const binary = intersection.map((x, i) => (i === 0 ? 1 : 0)).join('')
+  return matrix.reduce((acc, line, i) => {
+    return (
+      acc +
+      line.reduce((acc2, char, j) => {
+        if (char !== 'X') return acc2
 
-    return sum + parseInt(binary, 2)
+        const check = checkWord({ matrix, i, j, word: 'XMAS' })
+
+        return (
+          acc2 +
+          Number(check.right()) +
+          Number(check.left()) +
+          Number(check.down()) +
+          Number(check.up()) +
+          Number(check.rightDown()) +
+          Number(check.rightUp()) +
+          Number(check.leftUp()) +
+          Number(check.leftDown())
+        )
+      }, 0)
+    )
   }, 0)
 }
 
+function checkClockwise({ matrix, i, j }) {
+  return (word) => {
+    const [tl, tr, br, bl] = word.split('')
+
+    return (
+      matrix[i - 1]?.[j - 1] === tl &&
+      matrix[i - 1]?.[j + 1] === tr &&
+      matrix[i + 1]?.[j + 1] === br &&
+      matrix[i + 1]?.[j - 1] === bl
+    )
+  }
+}
+
 function solution02(list) {
-  const cards = Object.values(parseInput(list))
+  const matrix = list.map((line) => line.split(''))
 
-  cards.forEach(({ intersection }, i) => {
-    intersection.forEach((x, j) => {
-      const idx = i + j + 1
+  return matrix.reduce((acc, line, i) => {
+    return (
+      acc +
+      line.reduce((acc2, char, j) => {
+        if (char !== 'A') return acc2
 
-      if (cards[idx]) {
-        cards[idx].copies += cards[i].copies
-      }
-    })
-  })
+        const check = checkClockwise({ matrix, i, j })
 
-  return cards.reduce((sum, { copies }) => {
-    return sum + copies
+        if (check('MMSS') || check('SMMS') || check('SSMM') || check('MSSM'))
+          return acc2 + 1
+
+        return acc2
+      }, 0)
+    )
   }, 0)
 }
 
 read('test.txt').then((list) => {
-  assert.deepEqual(solution01(list), 13)
-  assert.deepEqual(solution02(list), 30)
+  assert.deepEqual(solution01(list), 18)
+  assert.deepEqual(solution02(list), 9)
 })
 
 read('input.txt').then((list) => {
-  assert.deepEqual(solution01(list), 18653)
-  assert.deepEqual(solution02(list), 5921508)
+  assert.deepEqual(solution01(list), 2521)
+  assert.deepEqual(solution02(list), 1912)
 })

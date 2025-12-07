@@ -1,66 +1,98 @@
-// eslint-disable-next-line max-classes-per-file
 import assert from 'assert'
 import read from '../../utils/read.js'
+import { DIR, OBJ, treeFromGrid } from '../../utils/grid.js'
+import bfs from '../../utils/bfs.js'
 
-class TestReceiver {
-  constructor(label) {
-    this.label = label
-  }
-}
+function parseInput(list) {
+  return list.reduce(
+    (acc, line, y) => {
+      acc.grid.push([])
 
-class InputType {
-  constructor(receivers) {
-    this.receivers = receivers.split(',').map((receiver) => receiver.trim())
-  }
+      line.split('').forEach((cell, x) => {
+        if (cell === OBJ.start) acc.start = [y, x]
+        else if (cell === OBJ.end) acc.end = [y, x]
 
-  updateReceivers(circuit) {
-    this.receivers = this.receivers.map(
-      (receiver) => circuit[receiver] || new TestReceiver(receiver)
-    )
-  }
-}
-
-class Button extends InputType {}
-
-class Broadcaster extends InputType {}
-
-class FlipFlop extends InputType {}
-
-class Conjunction extends InputType {}
-
-function solution01(list) {
-  const circuit = list.reduce(
-    (acc, line) => {
-      const [input, receivers] = line.split(' -> ')
-
-      if (input === 'broadcaster')
-        return { ...acc, [input]: new Broadcaster(receivers) }
-      if (input.includes('%'))
-        return { ...acc, [input.replace('%', '')]: new FlipFlop(receivers) }
-      if (input.includes('&'))
-        return {
-          ...acc,
-          [input.replace('&', '')]: new Conjunction(receivers),
-        }
+        acc.grid[y].push(cell)
+      })
 
       return acc
     },
-    { button: new Button('broadcaster') }
+    { grid: [], start: [], end: [] }
   )
+}
 
-  Object.values(circuit).forEach((value) => value.updateReceivers(circuit))
+function scanCheats({ grid, position, visited }) {
+  const [y, x] = position
 
-  return 0
+  return Object.values(DIR)
+    .map(([dy, dx]) => {
+      const [ny, nx] = [y + dy, x + dx]
+      const [nny, nnx] = [ny + dy, nx + dx]
+      const cell = grid[ny][nx]
+      const nextCell = grid[nny]?.[nnx]
+
+      if (
+        cell === OBJ.wall &&
+        nextCell &&
+        nextCell !== OBJ.wall &&
+        !visited.has([nny, nnx].join())
+      ) {
+        return [nny, nnx]
+      }
+
+      return null
+    })
+    .filter(Boolean)
+}
+
+function getCheatMap({ grid, fastestPath }) {
+  const stepsMap = fastestPath.reduce((acc, coords, i) => {
+    acc[coords] = i
+
+    return acc
+  }, {})
+  const visited = new Set()
+
+  return fastestPath.reduce((acc, coords, i) => {
+    const position = coords.split(',').map(Number)
+    const cheats = scanCheats({ grid, position, visited })
+
+    cheats.forEach((cheat) => {
+      const withoutCheat = stepsMap[cheat]
+      const withCheat = i + 2
+      const saves = withoutCheat - withCheat
+
+      acc[saves] = acc[saves] ? acc[saves] + 1 : 1
+    })
+
+    visited.add(coords)
+
+    return acc
+  }, {})
+}
+
+// input path is 9336 steps long
+function solution01(list, minSaves) {
+  const { grid, start, end } = parseInput(list)
+  const tree = treeFromGrid(grid)
+  const fastestPath = bfs({ tree, start: start.join(), end: end.join() })
+  const cheatMap = getCheatMap({ grid, fastestPath })
+
+  return Object.entries(cheatMap).reduce((acc, [saves, count]) => {
+    const savesNum = Number(saves)
+
+    return acc + (savesNum >= minSaves ? count : 0)
+  }, 0)
 }
 
 function solution02(list) {}
 
 read('test.txt').then((list) => {
-  assert.deepEqual(solution01(list), 32000000)
-  // assert.deepEqual(solution02(list), 167409079868000)
+  assert.deepEqual(solution01(list, 20), 5)
+  // assert.deepEqual(solution02(list), 0)
 })
 
 read('input.txt').then((list) => {
-  // assert.deepEqual(solution01(list), 434147)
-  // assert.deepEqual(solution02(list), 136146366355609)
+  assert.deepEqual(solution01(list, 100), 1393)
+  // assert.deepEqual(solution02(list), 0)
 })

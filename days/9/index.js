@@ -1,62 +1,112 @@
 import assert from 'assert'
 import read from '../../utils/read.js'
 
-function* deltasGenerator(numbers) {
-  let delta = [...numbers]
+function getDisk(list) {
+  const [line] = list
+  const blocks = line.split('').map(Number)
 
-  while (delta.some((n) => n !== 0)) {
-    delta = delta.reduce((acc, n, i) => {
-      if (i === delta.length - 1) return acc
+  return blocks.reduce((acc, block, i) => {
+    if (i % 2 !== 0) {
+      acc.push(...[].nMatrix(block, false))
+    } else {
+      acc.push(...[].nMatrix(block, i / 2))
+    }
 
-      return [...acc, delta[i + 1] - n]
-    }, [])
-
-    yield delta
-  }
-
-  yield false
+    return acc
+  }, [])
 }
 
-function getAllDeltas(numbers) {
-  const gen = deltasGenerator(numbers)
-  const result = [numbers]
-  let delta = gen.next().value
+function getDiskMap(list) {
+  let lastBlock = -1
+  let idx = 0
+  return getDisk(list).reduce(
+    (acc, block, i) => {
+      if (block === false) acc.freeSpace[i] = block
+      else acc.usedSpace[i] = block
 
-  while (delta) {
-    result.push(delta)
-    delta = gen.next().value
-  }
+      acc.diskMap[i] = block
 
-  return result
+      if (block !== lastBlock) {
+        idx = i
+        acc.groupedMap[idx] = [block]
+      } else acc.groupedMap[idx].push(block)
+
+      lastBlock = block
+
+      return acc
+    },
+    { diskMap: {}, freeSpace: {}, usedSpace: {}, groupedMap: {} }
+  )
 }
 
-function parseEnd(prev, curr, i) {
-  if (i === 0) return prev
-
-  return prev + curr[curr.length - 1]
-}
-
-function parseBeginning(prev, curr, i) {
-  if (i === 0) return prev
-
-  return -prev + curr[0]
-}
-
-function solution(list, callback) {
-  return list.reduce((acc, line) => {
-    const numbers = line.split(' ').toNumber()
-    const allDeltas = getAllDeltas(numbers).reverse().reduce(callback, 0)
-
-    return acc + allDeltas
+function checksumDisk(disk) {
+  return disk.reduce((acc, block, idx) => {
+    if (block === false) return acc
+    return acc + block * idx
   }, 0)
 }
 
+function solution01(list) {
+  const { diskMap, freeSpace, usedSpace } = getDiskMap(list)
+  const used = Object.keys(usedSpace)
+  const free = Object.keys(freeSpace)
+
+  // Fragment disk
+  free.some((idx) => {
+    const usedIdx = used.pop()
+
+    if (Number(usedIdx) <= Number(idx)) return true
+
+    diskMap[idx] = diskMap[usedIdx]
+    diskMap[usedIdx] = false
+
+    return false
+  })
+
+  return checksumDisk(Object.values(diskMap).filter((v) => v !== false))
+}
+
+function solution02(list) {
+  const { groupedMap } = getDiskMap(list)
+  const disk = Object.keys(groupedMap)
+  const used = disk
+    .filter((idx) => groupedMap[idx].some((v) => v !== false))
+    .reverse()
+  const free = disk.filter((idx) => groupedMap[idx].some((v) => v === false))
+
+  // fragment
+  used.forEach((idx) => {
+    const blocks = groupedMap[idx]
+    const fileSize = blocks.length
+    const freeSpaceIdx = free.find(
+      (freeIdx) =>
+        groupedMap[freeIdx].filter((b) => b === false).length >= fileSize
+    )
+
+    // Do nothing
+    if (!freeSpaceIdx) return
+
+    if (Number(freeSpaceIdx) > Number(idx)) return
+
+    groupedMap[freeSpaceIdx] = [
+      ...groupedMap[freeSpaceIdx].filter((v) => v !== false),
+      ...groupedMap[freeSpaceIdx]
+        .filter((v) => v === false)
+        .map((_, i) => blocks[i] || false),
+    ]
+
+    groupedMap[idx] = groupedMap[idx].map(() => false)
+  })
+
+  return checksumDisk(Object.values(groupedMap).flat())
+}
+
 read('test.txt').then((list) => {
-  assert.deepEqual(solution(list, parseEnd), 18 + 28 + 68)
-  assert.deepEqual(solution(list, parseBeginning), 2)
+  assert.deepEqual(solution01(list), 1928)
+  assert.deepEqual(solution02(list), 2858)
 })
 
 read('input.txt').then((list) => {
-  assert.deepEqual(solution(list, parseEnd), 1939607039)
-  assert.deepEqual(solution(list, parseBeginning), 1041)
+  assert.deepEqual(solution01(list), 6242766523059)
+  assert.deepEqual(solution02(list), 6272188244509)
 })
