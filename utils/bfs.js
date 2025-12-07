@@ -1,46 +1,46 @@
-import assert from 'assert'
+import assert from "node:assert";
 
 function bfs({ tree, start, end }) {
-  const queue = [[start]]
-  const visited = new Set([start])
+  const queue = [[start]];
+  const visited = new Set([start]);
 
-  if (start === end) return [start]
+  if (start === end) return [start];
 
   while (queue.length > 0) {
-    const path = queue.shift()
-    const node = path[path.length - 1]
+    const path = queue.shift();
+    const node = path[path.length - 1];
 
     for (let i = 0; i < tree[node].length; i++) {
-      const neighbor = tree[node][i]
+      const neighbor = tree[node][i];
 
       if (!visited.has(neighbor)) {
-        if (neighbor === end) return path.concat([neighbor])
-        visited.add(neighbor)
-        queue.push(path.concat([neighbor]))
+        if (neighbor === end) return path.concat([neighbor]);
+        visited.add(neighbor);
+        queue.push(path.concat([neighbor]));
       }
     }
   }
 
-  return []
+  return [];
 }
 
-export default bfs
+export default bfs;
 
 const tree = {
-  start: ['a', 'c'],
-  a: ['b', 'end'],
-  b: ['end'],
-  c: ['e'],
-  d: ['end'],
-  e: ['d', 'end'],
+  start: ["a", "c"],
+  a: ["b", "end"],
+  b: ["end"],
+  c: ["e"],
+  d: ["end"],
+  e: ["d", "end"],
   end: [],
-}
+};
 
 assert.deepEqual(
   bfs({
     tree,
-    start: 'start',
-    end: 'end',
+    start: "start",
+    end: "end",
   }),
-  ['start', 'a', 'end']
-)
+  ["start", "a", "end"],
+);
