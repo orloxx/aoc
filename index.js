@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { readdir } from "node:fs/promises";
 
 function run(day) {
   const p = spawn(`node ./days/${day}`, {
@@ -10,30 +11,32 @@ function run(day) {
   });
 }
 
-function getLastDay() {
-  const [year] = process.env.npm_package_version.split(".");
-  const endDate = new Date(`${year}-12-25`);
-  const now = new Date();
+async function getLastDay() {
+  const daysDone = (await readdir("./days", { withFileTypes: true }))
+    .filter((dirent) => dirent.isDirectory())
+    .map((dirent) => Number(dirent.name))
+    .sort((a, b) => a - b);
 
-  if (now.getTime() < endDate.getTime()) {
-    return now.getDate();
-  }
-  return 25;
+  return daysDone.pop();
 }
 
-try {
-  const [, , day] = process.argv;
-  const lastDay = getLastDay();
+async function start() {
+  try {
+    const [, , day] = process.argv;
+    const lastDay = await getLastDay();
 
-  if (day && day === "all") {
-    for (let i = 1; i <= lastDay; i += 1) {
-      run(i);
+    if (day && day === "all") {
+      for (let i = 1; i <= lastDay; i += 1) {
+        run(i);
+      }
+    } else if (day) {
+      run(day);
+    } else {
+      run(lastDay);
     }
-  } else if (day) {
-    run(day);
-  } else {
-    run(lastDay);
+  } catch (error) {
+    console.error(error);
   }
-} catch (error) {
-  console.error(error);
 }
+
+start();
