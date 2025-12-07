@@ -1,5 +1,5 @@
 import assert from "node:assert";
-import read from "../../utils/read.js";
+import read from "@/utils/read";
 
 function solution01(_list) {
   return 11;

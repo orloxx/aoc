@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { readdir } from "node:fs/promises";
 
 function run(day) {
-  const p = spawn(`node ./days/${day}`, {
+  const p = spawn(`node --import ./loader.js ./days/${day}`, {
     shell: true,
     stdio: "inherit",
   });
